@@ -4,6 +4,7 @@
 ]]
 ---@class MapManager
 local MapMng = class("MapManager")
+local JPS = require("GameCore.Movement.Navigation.JPS")
 
 ---@class MapVO
 local MapVO = {
@@ -137,7 +138,27 @@ end
 
 ---@param dx int direction_x
 ---@param dz int direction_z
-function MapMng:IsUnitCanMoveTo(unit, dx, dz)
+---默认当前是可移动的，判断向某方向移动一格是否可行
+function MapMng:IsAreaCanMoveTo(x, z, dx, dz, size)
+    local ax, az = self:GetAreaAnchor(x, z, size)
+    if dx ~= 0 then
+        local slicex = dx > 0 and ax + size or ax - 1
+        for i = az + dz, az + dz + size - 1 do
+            if not self:IsGridCanMove(slicex, i) then
+                return false
+            end
+        end
+    end
+
+    if dz ~= 0 then
+        local slicez = dz > 0 and dz + size or dz - 1
+        for i = ax + dx, ax + dx + size - 1 do
+            if not self:IsGridCanMove(i, slicez) then
+                return false
+            end
+        end
+    end
+    return true
 end
 
 function MapMng:GetMoveTask(uid)
@@ -248,10 +269,14 @@ function MapMng:AStar(source, target, offset)
     end
 end
 
-function MapMng:JPSFind(start, goal)
-    local openQue = {start}
-    local closeMap = {}
-    while #openQue > 0 do
+function MapMng:JPSFind(start, goal, size)
+    ---@type JPS
+    local jps = JPS.new()
+    jps.canShiftFunc = function(start, dx, dz)
+        self:IsAreaCanMoveTo(start.x, start.z, dx, dz, size)
+    end
+    jps.distFunc = function(anode, bnode)
+        return self:GetDist(anode, bnode)
     end
 end
 
