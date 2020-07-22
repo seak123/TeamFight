@@ -21,7 +21,8 @@ MapMng.GridState = {
 }
 
 MapMng.Const = {
-    GridSize = 1 -- 格子边长(与Unity unit单位一致)
+    GridSize = 0.1, -- 格子边长(与Unity unit单位一致)
+    GridSizeFactor = 10 -- 格子边长系数(用于计算 1/GridSize)
 }
 
 ---@param sess BattleSession
@@ -64,6 +65,16 @@ function MapMng:GetMapViewCenter()
         z = self.height * self.Const.GridSize / 2
     }
     return center
+end
+
+function MapMng:View2Logic(pos)
+    local logic_x = math.floor(pos.x * MapMng.Const.GridSizeFactor)
+    local logic_z = math.floor(pos.z * MapMng.Const.GridSizeFactor)
+    return {x = logic_x, z = logic_z}
+end
+-- gird center
+function MapMng:Logic2View(pos)
+    return {x = (pos.x + 0.5) * MapMng.Const.GridSize, z = (pos.z + 0.5) * MapMng.Const.GridSize}
 end
 
 --- x in [0,width-1] ; z in [0,height-1]
@@ -151,7 +162,7 @@ function MapMng:IsAreaCanMoveTo(x, z, dx, dz, size)
     end
 
     if dz ~= 0 then
-        local slicez = dz > 0 and dz + size or dz - 1
+        local slicez = dz > 0 and az + size or az - 1
         for i = ax + dx, ax + dx + size - 1 do
             if not self:IsGridCanMove(i, slicez) then
                 return false
@@ -159,6 +170,9 @@ function MapMng:IsAreaCanMoveTo(x, z, dx, dz, size)
         end
     end
     return true
+end
+
+function MapMng:LineTest()
 end
 
 function MapMng:GetMoveTask(uid)
@@ -273,11 +287,12 @@ function MapMng:JPSFind(start, goal, size)
     ---@type JPS
     local jps = JPS.new()
     jps.canShiftFunc = function(start, dx, dz)
-        self:IsAreaCanMoveTo(start.x, start.z, dx, dz, size)
+        return self:IsAreaCanMoveTo(start.x, start.z, dx, dz, size)
     end
     jps.distFunc = function(anode, bnode)
         return self:GetDist(anode, bnode)
     end
+    return jps:Finder(start, goal)
 end
 
 -------------- map logic function------------

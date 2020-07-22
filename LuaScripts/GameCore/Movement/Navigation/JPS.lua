@@ -3,6 +3,8 @@ local JPS = class("JPS")
 
 function JPS:ctor()
     self.nodes = {}
+    self.start = nil
+    self.goal = nil
 
     self.canShiftFunc = nil
     self.distFunc = nil
@@ -88,18 +90,67 @@ end
 function JPS:Jump(parent, node)
     local dx = (node.x - parent.x) / math.max(node.x - parent.x, 1)
     local dz = (node.z - parent.z) / math.max(node.z - parent.z, 1)
+
+    if node.x == self.goal.x and node.z == self.goal.z then
+        return self:Fetch(node.x, node.z)
+    end
+
+    if dx ~= 0 and dz ~= 0 then
+        if
+            (not self.canShiftFunc(node, -dx, 0) and self.canShiftFunc(node, -dx, dz)) or
+                (not self.canShiftFunc(node, 0, -dz) and self.canShiftFunc(node, dx, -dz))
+         then
+            return self:Fetch(node.x, node.z)
+        end
+        if self:Jump(node, self:Fetch(node.x + dx, node.z)) or self:Jump(node, self:Fetch(node.x, node.z + dz)) then
+            return self:Fetch(node.x, node.z)
+        end
+    elseif dx ~= 0 then
+        if
+            (not self.canShiftFunc(node, 0, 1) and self.canShiftFunc(node, dx, 1)) or
+                (not self.canShiftFunc(node, 0, -1) and self.canShiftFunc(node, dx, -1))
+         then
+            return self:Fetch(node.x, node.z)
+        end
+    elseif dz ~= 0 then
+        if
+            (not self.canShiftFunc(node, 1, 0) and self.canShiftFunc(node, 1, dz)) or
+                (not self.canShiftFunc(node, -1, dz) and self.canShiftFunc(node, -1, dz))
+         then
+            return self:Fetch(node.x, node.z)
+        end
+    end
+
+    if self.canShiftFunc(node, dx, dz) then
+        return self:Jump(node, self:Fetch(node.x + dx, node.z + dz))
+    else
+        return nil
+    end
 end
 
 ---@param start node 开始点
 ---@param goal node 目标点
 function JPS:Finder(start, goal)
     local startNode = self:Fetch(start.x, start.z)
+    local goalNode = self:Fetch(goal.x, goal.z)
     startNode.h = self.distFunc(startNode, goal)
     startNode.f = startNode.h + startNode.g
+
+    self.start = startNode
+    self.goal = goalNode
+
     local openQue = {startNode}
+    local optimalNode = nil
 
     while #openQue > 0 do
         local curNode = openQue[1]
+
+        --check goal
+        if curNode.x == self.goal.x and curNode.z == self.goal.z then
+            return self:BuildPath(curNode)
+        end
+
+        -- start search
         local neighbours = self:GetNeighbours(curNode)
         curNode.closed = true
 
@@ -123,11 +174,13 @@ function JPS:Finder(start, goal)
                         openQue[sameIndex].g = ng
                         openQue[sameIndex].h = nh
                         openQue[sameIndex].f = nf
+                        openQue[sameIndex].parent = curNode
                     end
                 else
                     jumpNode.g = ng
                     jumpNode.h = nh
                     jumpNode.f = nf
+                    jumpNode.parent = curNode
                     table.insert(openQue, jumpNode)
                 end
             end
@@ -140,6 +193,18 @@ function JPS:Finder(start, goal)
             end
         )
     end
+
+    return nil
+end
+
+function JPS:BuildPath(endNode)
+    local path = {}
+    local curNode = endNode
+    while curNode ~= nil do
+        table.insert(path, 1, {x = curNode.x, z = curNode.z})
+        curNode = curNode.parent
+    end
+    return path
 end
 
 return JPS

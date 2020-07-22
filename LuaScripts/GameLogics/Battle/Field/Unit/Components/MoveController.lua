@@ -21,7 +21,9 @@ function Ctrller:Init()
     }
     self.viewPosition = self.master.sess.map:GetMapGridCenter(self.position.x, self.position.z)
     self.curState = Ctrller.State.Stop
+
     self.path = {}
+    self.pathIterator = 0
 end
 
 function Ctrller:Update(delta)
@@ -43,15 +45,18 @@ function Ctrller:SwitchState(state)
 end
 
 function Ctrller:MoveToPos(pos)
-    local result,next = self.master.sess.map:UnitReqMove(self.master, pos)
+    local result, next = self.master.sess.map:UnitReqMove(self.master, pos)
     if result then
         local map = self.master.sess.map
-        self.master.avatar:TurnToPos(map:GetMapGridCenter(next.x,next.z))
+        self.master.avatar:TurnToPos(map:GetMapGridCenter(next.x, next.z))
     end
     return result
 end
 
 function Ctrller:Walk(delta)
+    if self.path ~= nil then
+        local advance = self.master.properties:GetProperty("speed") * delta
+    end
 end
 
 return Ctrller
