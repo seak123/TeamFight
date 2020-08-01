@@ -14,6 +14,11 @@ local setting = {
             }
         },
         {
+            Name = "Button/Text",
+            Alias = "ButtonText",
+            Type = CS.UnityEngine.UI.Text
+        },
+        {
             Name = "Exit",
             Type = CS.UnityEngine.UI.Button,
             Handler = {
@@ -31,14 +36,22 @@ function UIFinal:OnAwake()
 end
 
 function UIFinal:OnStart()
-    -- get luabehaviour
-    --self.ScrollView =
+    self.ButtonText.text = BattleManager.session.field:CheckBattleResult() == 1 and "下一关" or "重新挑战"
 end
 
 function UIFinal:OnClickButton()
+    local nextLevel = nil
+    if BattleManager.session ~= nil and BattleManager.session.vo.level then
+        nextLevel = PlayerManager:GetCurLevel()
+    end
+
     BattleManager:ExitBattle()
-    BattleManager:StartBattle({id = 1, myHeros = {{1,2,3,4}, {1,2,3,4}}})
-    CS.WindowsUtil.RemoveWindow(self._target)
+    if nextLevel > ConfigManager:GetLevelNum() then
+        NoticeManager.Notice("已全部挑战")
+    else
+        BattleManager:StartBattle({id = 1, level = nextLevel})
+        CS.WindowsUtil.RemoveWindow(self._target)
+    end
 end
 
 function UIFinal:OnClickExit()

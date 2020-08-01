@@ -33,7 +33,6 @@ function Creature:Init()
     self.buffMng = BuffMng.new(self)
 
     -- base info
-    self.size = self.vo.size
     self.hp = self.properties:GetProperty("hp")
     self.ap = 0
     self.alive = true

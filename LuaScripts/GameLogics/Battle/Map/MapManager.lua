@@ -4,7 +4,6 @@
 ]]
 ---@class MapManager
 local MapMng = class("MapManager")
-local JPS = require("GameCore.Movement.Navigation.JPS")
 
 ---@class MapVO
 local MapVO = {
@@ -21,8 +20,8 @@ MapMng.GridState = {
 }
 
 MapMng.Const = {
-    GridSize = 0.1, -- 格子边长(与Unity unit单位一致)
-    GridSizeFactor = 10 -- 格子边长系数(用于计算 1/GridSize)
+    GridSize = 10, -- 格子边长(与Unity unit单位一致)
+    PrintLog = false
 }
 
 ---@param sess BattleSession
@@ -67,16 +66,6 @@ function MapMng:GetMapViewCenter()
     return center
 end
 
-function MapMng:View2Logic(pos)
-    local logic_x = math.floor(pos.x * MapMng.Const.GridSizeFactor)
-    local logic_z = math.floor(pos.z * MapMng.Const.GridSizeFactor)
-    return {x = logic_x, z = logic_z}
-end
--- gird center
-function MapMng:Logic2View(pos)
-    return {x = (pos.x + 0.5) * MapMng.Const.GridSize, z = (pos.z + 0.5) * MapMng.Const.GridSize}
-end
-
 --- x in [0,width-1] ; z in [0,height-1]
 
 ---@param x int pos-width
@@ -95,11 +84,14 @@ end
 function MapMng:GetDist(pointA, pointB)
     local delX = math.abs(pointA.x - pointB.x)
     local delZ = math.abs(pointA.z - pointB.z)
-    return math.sqrt(delX * delX + delZ * delZ)
+    local diagLength = math.min(delX, delZ)
+    return diagLength * Math.diagonalFactor + math.max(delX, delZ) - diagLength
 end
 -- calculate the range dist(caster from A to B)
 function MapMng:GetRangeDist(pointA, pointB)
-    return self:GetDist(pointA, pointB)
+    local delX = math.abs(pointA.x - pointB.x)
+    local delZ = math.abs(pointA.z - pointB.z)
+    return math.max(delX, delZ)
 end
 ---@param px int coord-x
 ---@param pz int coord-z
@@ -120,59 +112,6 @@ end
 
 function MapMng:IsGridValid(x, z)
     return x >= 0 and x < self.width and z >= 0 and z < self.height
-end
-
-function MapMng:IsGridCanMove(x, z)
-    if self:IsGridValid(x, z) then
-        return self:GetMapGridInfo(x, z).state == self.GridState.Empty
-    end
-    return false
-end
-
---- 用一个anchor坐标来定位一个矩形面积
-function MapMng:GetAreaAnchor(x, z, size)
-    return x - math.floor(size / 2), z - math.floor(size / 2)
-end
----@param px int pos-x
----@param pz int pos-z
-function MapMng:IsAreaCanMove(px, pz, size)
-    local anchorX, anchorZ = self:GetAreaAnchor(px, pz, size)
-    for i = anchorX, anchorX + size - 1 do
-        for j = anchorZ, anchorZ + size - 1 do
-            if not self:IsGridCanMove(i, j) then
-                return false
-            end
-        end
-    end
-    return true
-end
-
----@param dx int direction_x
----@param dz int direction_z
----默认当前是可移动的，判断向某方向移动一格是否可行
-function MapMng:IsAreaCanMoveTo(x, z, dx, dz, size)
-    local ax, az = self:GetAreaAnchor(x, z, size)
-    if dx ~= 0 then
-        local slicex = dx > 0 and ax + size or ax - 1
-        for i = az + dz, az + dz + size - 1 do
-            if not self:IsGridCanMove(slicex, i) then
-                return false
-            end
-        end
-    end
-
-    if dz ~= 0 then
-        local slicez = dz > 0 and az + size or az - 1
-        for i = ax + dx, ax + dx + size - 1 do
-            if not self:IsGridCanMove(i, slicez) then
-                return false
-            end
-        end
-    end
-    return true
-end
-
-function MapMng:LineTest()
 end
 
 function MapMng:GetMoveTask(uid)
@@ -215,6 +154,8 @@ function MapMng:AStar(source, target, offset)
     local resultP
     while #queue > 0 do
         local curP = queue[1]
+        local sx = curP.x
+        local sz = curP.z
         -- if curP is near target-point then return this result
         if self:GetRangeDist(curP, target) <= offset then
             resultP = curP
@@ -240,19 +181,13 @@ function MapMng:AStar(source, target, offset)
                     end
                 )
                 if sameP == nil then
-                    table.insert(
-                        queue,
-                        {
-                            x = newP.x,
-                            z = newP.z,
-                            cost = curP.cost + matrix[i].cost,
-                            dist = distCal(newP),
-                            weight = matrix[i].cost + distCal(newP),
-                            parent = curP
-                        }
-                    )
+                    newP.cost = curP.cost + matrix[i].cost
+                    newP.dist = distCal(newP)
+                    newP.weight = newP.cost + distCal(newP)
+                    newP.parent = curP
+                    table.insert(queue, newP)
                 else
-                    if sameP.weight > matrix[i].cost + distCal(newP) then
+                    if sameP.weight > curP.cost + matrix[i].cost + distCal(newP) then
                         sameP.cost = curP.cost + matrix[i].cost
                         sameP.dist = distCal(newP)
                         sameP.weight = sameP.cost + sameP.dist
@@ -269,6 +204,19 @@ function MapMng:AStar(source, target, offset)
             end
         )
     end
+    if MapMng.Const.PrintLog then
+        local path = {}
+        local cur = resultP
+        while cur ~= nil do
+            table.insert(path, 0, cur)
+            cur = cur.parent
+        end
+        local str = tostring(uid) .. " path:"
+        for i = 1, #path do
+            str = str .. " [" .. path[i].x .. "," .. path[i].z .. "]=>"
+        end
+        Debug.Log(str)
+    end
 
     if resultP == nil then
         --cannot find a path from source to target
@@ -283,26 +231,14 @@ function MapMng:AStar(source, target, offset)
     end
 end
 
-function MapMng:JPSFind(start, goal, size)
-    ---@type JPS
-    local jps = JPS.new()
-    jps.canShiftFunc = function(start, dx, dz)
-        return self:IsAreaCanMoveTo(start.x, start.z, dx, dz, size)
-    end
-    jps.distFunc = function(anode, bnode)
-        return self:GetDist(anode, bnode)
-    end
-    return jps:Finder(start, goal)
-end
-
 -------------- map logic function------------
 
-function MapMng:GetEmptyGrid(x, z, size)
-    if size == nil then
-        size = 1
+function MapMng:GetEmptyGrid(x, z)
+    if self:IsGridValid(x, z) == false then
+        Debug.Error("Attempt to find a invalid grid [x=", x, "] ", "[z=", z, "]")
+        return nil, nil
     end
-
-    if self:IsAreaCanMove(x, z, size) then
+    if self:GetMapGridInfo(x, z).state == self.GridState.Empty then
         return x, z
     end
     -- start to find a adjacent emity grid
@@ -321,7 +257,10 @@ function MapMng:GetEmptyGrid(x, z, size)
         for i = 1, index do
             nowPos.x = nowPos.x + forward.x
             nowPos.z = nowPos.z + forward.z
-            if self:IsAreaCanMove(nowPos.x, nowPos.z, size) then
+            if
+                self:IsGridValid(nowPos.x, nowPos.z) and
+                    self:GetMapGridInfo(nowPos.x, nowPos.z).state == self.GridState.Empty
+             then
                 return nowPos.x, nowPos.z
             end
         end
@@ -345,13 +284,10 @@ function MapMng:GetEmptyGrid(x, z, size)
 end
 
 function MapMng:TryCreateUnit(unit)
-    local x, z = self:GetEmptyGrid(unit.vo.initPos.x, unit.vo.initPos.z, unit.size)
-    local anchorX, anchorZ = self:GetAreaAnchor(x, z, unit.size)
-    for i = anchorX, anchorX + unit.size - 1 do
-        for j = anchorZ, anchorZ + unit.size - 1 do
-            self:GetMapGridInfo(i, j).state = self.GridState.Occupy
-        end
-    end
+    local x, z = self:GetEmptyGrid(unit.vo.initPos.x, unit.vo.initPos.z)
+    local gridInfo = self:GetMapGridInfo(x, z)
+    gridInfo.state = self.GridState.Occupy
+    gridInfo.unit = unit
     return x, z
 end
 

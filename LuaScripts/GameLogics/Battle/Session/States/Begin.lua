@@ -17,6 +17,19 @@ function BeginState:ctor(sess)
 end
 
 function BeginState:Enter()
+    --初始化游戏内容
+    local units = self.sess.lvlCfg.units
+    for i = 1, #units do
+        local vo = ConfigManager:GetUnitConfig(units[i].unitId)
+        vo.initPos = {
+            x = units[i].x,
+            z = units[i].z
+        }
+        BattleManager.session.field:CreateUnit(vo, units[i].camp)
+    end
+
+    NoticeManager.Notice("本关卡可置放" .. self.sess.unitLimit .. "个单位")
+
     self.next = FSM.SessionType.Embattle
 end
 

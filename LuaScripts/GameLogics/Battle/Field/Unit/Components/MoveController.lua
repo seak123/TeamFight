@@ -21,13 +21,9 @@ function Ctrller:Init()
     }
     self.viewPosition = self.master.sess.map:GetMapGridCenter(self.position.x, self.position.z)
     self.curState = Ctrller.State.Stop
-
-    self.path = {}
-    self.pathIterator = 0
 end
 
 function Ctrller:Update(delta)
-    self:Walk(delta)
 end
 
 function Ctrller:SwitchState(state)
@@ -45,52 +41,12 @@ function Ctrller:SwitchState(state)
 end
 
 function Ctrller:MoveToPos(pos)
-    local result, next = self.master.sess.map:UnitReqMove(self.master, pos)
+    local result,next = self.master.sess.map:UnitReqMove(self.master, pos)
     if result then
         local map = self.master.sess.map
-        self.master.avatar:TurnToPos(map:GetMapGridCenter(next.x, next.z))
+        self.master.avatar:TurnToPos(map:GetMapGridCenter(next.x,next.z))
     end
     return result
-end
-
-function Ctrller:Walk(delta)
-    if self.path ~= nil then
-        local map = self.master.sess.map
-        local advanceDist = self.master.properties:GetProperty("speed") * delta
-        local advancePos = self.position
-        local result = nil
-        local isStop = false
-        for i = self.pathIterator, #self.path do
-            local between = map:GetDist(advancePos, self.path[i])
-            if advanceDist >= between then
-                self.pathIterator = self.pathIterator + 1
-                advanceDist = advanceDist - between
-                advancePos = self.path[i]
-                if self.pathIterator > #self.path then
-                    result = {
-                        x = advancePos.x,
-                        z = advancePos.z
-                    }
-                    isStop = true
-                end
-            else
-                local k = advanceDist / between
-                result = {
-                    x = k * (self.path[i].x - advancePos.x) + advancePos.x,
-                    z = k * (self.path[i].z - advancePos.z) + advancePos.z
-                }
-            end
-        end
-        if result then
-            self.position = result
-        end
-        if isStop then
-            self:Stop()
-        end
-    end
-end
-
-function Ctrller:Stop()
 end
 
 return Ctrller
